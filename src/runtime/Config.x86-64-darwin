@@ -28,7 +28,11 @@ ifdef LISP_FEATURE_SB_THREAD
   OS_LIBS += -lpthread
 endif
 ifdef LISP_FEATURE_SB_CORE_COMPRESSION
-  OS_LIBS += -lz
+  ifdef LISP_FEATURE_LZ4_CORE_COMPRESSION
+    OS_LIBS += -llz4
+  else
+    OS_LIBS += -lz
+  endif
 endif
 
 CC = gcc

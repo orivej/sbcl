@@ -31,7 +31,11 @@ OS_SRC = win32-os.c x86-win32-os.c os-common.c pthreads_win32.c
 LINKFLAGS = -Wl,-export-all-symbols -Wl,mswin.def
 OS_LIBS = -l ws2_32 -ladvapi32
 ifdef LISP_FEATURE_SB_CORE_COMPRESSION
-  OS_LIBS += -lz
+  ifdef LISP_FEATURE_LZ4_CORE_COMPRESSION
+    OS_LIBS += -llz4
+  else
+    OS_LIBS += -lz
+  endif
 endif
 
 GC_SRC = gencgc.c

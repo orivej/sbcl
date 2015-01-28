@@ -18,7 +18,11 @@ LINKFLAGS += -Wl,--export-dynamic
 OS_SRC = bsd-os.c x86-bsd-os.c
 OS_LIBS = # -ldl
 ifdef LISP_FEATURE_SB_CORE_COMPRESSION
-  OS_LIBS += -lz
+  ifdef LISP_FEATURE_LZ4_CORE_COMPRESSION
+    OS_LIBS += -llz4
+  else
+    OS_LIBS += -lz
+  endif
 endif
 
 GC_SRC = gencgc.c

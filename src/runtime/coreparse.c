@@ -51,7 +51,11 @@
 #include <errno.h>
 
 #ifdef LISP_FEATURE_SB_CORE_COMPRESSION
-# include <zlib.h>
+# ifdef LISP_FEATURE_LZ4_CORE_COMPRESSION
+#  include <lz4.h>
+# else
+#  include <zlib.h>
+# endif
 #endif
 
 unsigned char build_id[] =
@@ -207,19 +211,35 @@ os_vm_address_t copy_core_bytes(int fd, os_vm_offset_t offset,
 #endif
 
 #ifdef LISP_FEATURE_SB_CORE_COMPRESSION
-# define ZLIB_BUFFER_SIZE (1u<<16)
 os_vm_address_t inflate_core_bytes(int fd, os_vm_offset_t offset,
                                    os_vm_address_t addr, int len)
 {
+# ifdef LISP_FEATURE_LZ4_CORE_COMPRESSION
+    off_t here, end;
+    os_vm_address_t data;
+    int compressed_size;
+    here = lseek(fd, 0, SEEK_CUR);
+    end = lseek(fd, 0, SEEK_END);
+    data = os_validate(NULL, end);
+    os_invalidate(data, end);
+    data = os_map(fd, 0, data, end);
+    compressed_size = LZ4_decompress_fast(data + offset, addr, len);
+    if (compressed_size < 0)
+        lose("failed to decompress core file with LZ4\n");
+    lseek(fd, here + compressed_size, SEEK_SET);
+    os_invalidate(data, end);
+    return addr;
+# else
+#  define ZLIB_BUFFER_SIZE (1u<<16)
     z_stream stream;
     unsigned char buf[ZLIB_BUFFER_SIZE];
     int ret;
 
-# ifdef LISP_FEATURE_WIN32
+#  ifdef LISP_FEATURE_WIN32
     /* Ensure the memory is committed so zlib doesn't segfault trying to
        inflate. */
     os_validate_recommit(addr, len);
-# endif
+#  endif
 
     if (-1 == lseek(fd, offset, SEEK_SET)) {
         lose("Unable to lseek() on corefile\n");
@@ -271,8 +291,9 @@ os_vm_address_t inflate_core_bytes(int fd, os_vm_offset_t offset,
 
     inflateEnd(&stream);
     return addr;
+#  undef ZLIB_BUFFER_SIZE
+# endif
 }
-# undef ZLIB_BUFFER_SIZE
 #endif
 
 int merge_core_pages = -1;

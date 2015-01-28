@@ -123,11 +123,14 @@ The following &KEY arguments are defined:
      (rarely used)
 
   :COMPRESSION
-     This is only meaningful if the runtime was built with the :SB-CORE-COMPRESSION
-     feature enabled. If NIL (the default), saves to uncompressed core files. If
-     :SB-CORE-COMPRESSION was enabled at build-time, the argument may also be
-     an integer from -1 to 9, corresponding to zlib compression levels, or T
-     (which is equivalent to the default compression level, -1).
+     This is only meaningful if the runtime was built with
+     the :SB-CORE-COMPRESSION feature enabled. If NIL (the default), saves to
+     uncompressed core files. If :SB-CORE-COMPRESSION was enabled at build-time,
+     the argument may also be: in case of zlib - an integer from -1 to 9,
+     corresponding to zlib compression levels, or T (which is equivalent to the
+     default compression level, -1); in case of LZ4 (if the runtime was built
+     with :lz4-core-compression) - an integer from 0 to 16, corresponding to LZ4
+     HC compression levels, or T for 0, the default.
 
   :APPLICATION-TYPE
      Present only on Windows and is meaningful only with :EXECUTABLE T.
@@ -167,7 +170,11 @@ sufficiently motivated to do lengthy fixes."
   #!+gencgc
   (declare (ignore purify root-structures environment-name))
   #!+sb-core-compression
-  (check-type compression (or boolean (integer -1 9)))
+  (or
+   #!-lz4-core-compression
+   (check-type compression (or boolean (integer -1 9)))
+   #!+lz4-core-compression
+   (check-type compression (or boolean (integer 0 16))))
   #!-sb-core-compression
   (when compression
     (error "Unable to save compressed core: this runtime was not built with zlib support"))
@@ -180,7 +187,8 @@ sufficiently motivated to do lengthy fixes."
         :report "Abort saving the core."
         (return-from save-lisp-and-die))))
   (when (eql t compression)
-    (setf compression -1))
+    (setf compression #!-lz4-core-compression -1
+                      #!+lz4-core-compression 0))
   (tune-hashtable-sizes-of-all-packages)
   (deinit)
   ;; FIXME: Would it be possible to unmix the PURIFY logic from this

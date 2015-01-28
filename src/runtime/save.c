@@ -39,7 +39,12 @@
 #include "genesis/symbol.h"
 
 #ifdef LISP_FEATURE_SB_CORE_COMPRESSION
-# include <zlib.h>
+# ifdef LISP_FEATURE_LZ4_CORE_COMPRESSION
+#  include <lz4.h>
+#  include <lz4hc.h>
+# else
+#  include <zlib.h>
+# endif
 #endif
 
 /* write_runtime_options uses a simple serialization scheme that
@@ -90,8 +95,22 @@ write_bytes_to_file(FILE * file, char *addr, long bytes, int compression)
             }
         }
 #ifdef LISP_FEATURE_SB_CORE_COMPRESSION
+# ifdef LISP_FEATURE_LZ4_CORE_COMPRESSION
+    } else if ((compression >= -1) && (compression <= 16)) {
+        os_vm_address_t data;
+        int data_size, compressed_size;
+        data_size = LZ4_compressBound(bytes);
+        data = os_validate(NULL, data_size);
+        compressed_size = LZ4_compressHC2(addr, data, bytes, compression);
+        if (compressed_size == 0)
+            lose("failed to compress core file with LZ4\n");
+        fwrite(data, 1, compressed_size, file);
+        os_invalidate(data, data_size);
+        printf("compressed %lu bytes into %i with LZ4 HC at level %i\n",
+               bytes, compressed_size, compression);
+# else
     } else if ((compression >= -1) && (compression <= 9)) {
-# define ZLIB_BUFFER_SIZE (1u<<16)
+#  define ZLIB_BUFFER_SIZE (1u<<16)
         z_stream stream;
         unsigned char buf[ZLIB_BUFFER_SIZE];
         unsigned char * written, * end;
@@ -124,9 +143,10 @@ write_bytes_to_file(FILE * file, char *addr, long bytes, int compression)
             }
         } while (stream.avail_out == 0);
         deflateEnd(&stream);
-        printf("compressed %lu bytes into %lu at level %i\n",
+        printf("compressed %lu bytes into %lu with zlib at level %i\n",
                bytes, total_written, compression);
-# undef ZLIB_BUFFER_SIZE
+#  undef ZLIB_BUFFER_SIZE
+# endif
 #endif
     } else {
 #ifdef LISP_FEATURE_SB_CORE_COMPRESSION

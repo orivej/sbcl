@@ -20,7 +20,11 @@ OS_SRC = linux-os.c alpha-linux-os.c
 OS_LIBS = -ldl
 
 ifdef LISP_FEATURE_SB_CORE_COMPRESSION
-  OS_LIBS += -lz
+  ifdef LISP_FEATURE_LZ4_CORE_COMPRESSION
+    OS_LIBS += -llz4
+  else
+    OS_LIBS += -lz
+  endif
 endif
 
 GC_SRC = cheneygc.c
